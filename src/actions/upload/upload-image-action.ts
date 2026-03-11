@@ -1,65 +1,58 @@
 "use server";
 
-import { verifyLoginSession } from "@/lib/login/manage-login";
-import { mkdir, writeFile } from "fs/promises";
-import { extname, resolve } from "path";
+import { getLoginSessionForApi } from "@/lib/login/manage-login";
+import { authenticatedApiRequest } from "@/utils/authenticated-api-request";
 
 type UploadImageAction = {
-    url: string;
-    error: string;
+  url: string;
+  error: string;
 };
 
 export async function uploadImageAction(
-    formData: FormData,
+  formData: FormData,
 ): Promise<UploadImageAction> {
-    const makeResult = ({ url = "", error = "" }) => ({ url, error });
+  const makeResult = ({ url = "", error = "" }) => ({ url, error });
 
-    const isAuthenticated = await verifyLoginSession();
+  const isAuthenticated = await getLoginSessionForApi();
 
-    if (!isAuthenticated) {
-        return makeResult({ error: "Faça login novamente" });
-    }
+  if (!isAuthenticated) {
+    return makeResult({ error: "Faça login novamente" });
+  }
 
-    if (!(formData instanceof FormData)) {
-        return makeResult({ error: "Dados inválidos" });
-    }
+  if (!(formData instanceof FormData)) {
+    return makeResult({ error: "Dados inválidos" });
+  }
 
-    const file = formData.get("file");
+  const file = formData.get("file");
 
-    if (!(file instanceof File)) {
-        return makeResult({ error: "Arquivo inválidos" });
-    }
+  if (!(file instanceof File)) {
+    return makeResult({ error: "Arquivo inválidos" });
+  }
 
-    const uploaderMaxSize =
-        Number(process.env.NEXT_PUBLIC_IMAGE_UPLOADER_MAX_SIZE) || 921600;
+  const uploaderMaxSize =
+    Number(process.env.NEXT_PUBLIC_IMAGE_UPLOADER_MAX_SIZE) || 921600;
 
-    if (file.size > uploaderMaxSize) {
-        return makeResult({ error: "Arquivo muito grande" });
-    }
+  if (file.size > uploaderMaxSize) {
+    return makeResult({ error: "Arquivo muito grande" });
+  }
 
-    if (!file.type.startsWith("image/")) {
-        return makeResult({ error: "Imagem inválida" });
-    }
+  if (!file.type.startsWith("image/")) {
+    return makeResult({ error: "Imagem inválida" });
+  }
 
-    const imageExtension = extname(file.name);
-    const uniqueImageName = `${Date.now()}${imageExtension}`;
+  const uploadResponse = await authenticatedApiRequest<{ url: string }>(
+    `/upload`,
+    {
+      method: "POST",
+      body: formData,
+    },
+  );
 
-    const uploaderDirectory = process.env.IMAGE_UPLOAD_DIRECTORY || "uploads";
+  if (!uploadResponse.success) {
+    return makeResult({ error: uploadResponse.errors[0] });
+  }
 
-    const uploadFullPath = resolve(process.cwd(), "public", uploaderDirectory);
-    await mkdir(uploadFullPath, { recursive: true });
+  const url = `${process.env.IMAGE_SERVER_URL}${uploadResponse.data.url}`;
 
-    const fileArrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(fileArrayBuffer);
-
-    const fileFullPath = resolve(uploadFullPath, uniqueImageName);
-
-    await writeFile(fileFullPath, buffer);
-
-    const imgServerUrl =
-        process.env.IMAGE_SERVER_URL || "http://localhost:3000/uploads";
-
-    const url = `${imgServerUrl}/${uniqueImageName}`;
-
-    return makeResult({ url });
+  return makeResult({ url });
 }
