@@ -1,9 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  reactCompiler: true,
   images: {
-    dangerouslyAllowLocalIP: true,
     remotePatterns: [
       {
         protocol: "https",
@@ -19,7 +17,6 @@ const nextConfig: NextConfig = {
         pathname: "/**",
         search: "",
       },
-
       {
         protocol: "http",
         hostname: "localhost",
@@ -28,6 +25,7 @@ const nextConfig: NextConfig = {
         search: "",
       },
     ],
+    dangerouslyAllowLocalIP: true,
   },
 };
 
