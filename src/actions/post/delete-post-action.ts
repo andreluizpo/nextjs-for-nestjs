@@ -1,44 +1,60 @@
 "use server";
 
-import { verifyLoginSession } from "@/lib/login/manage-login";
-import { postRepository } from "@/repositories/post";
+import { getLoginSessionForApi } from "@/lib/login/manage-login";
+import { PublicPostForApiDto } from "@/lib/post/schemas";
+import { authenticatedApiRequest } from "@/utils/authenticated-api-request";
 import { revalidateTag } from "next/cache";
 
 export async function deletePostAction(id: string) {
-    const isAuthenticated = await verifyLoginSession();
+  const isAuthenticated = await getLoginSessionForApi();
 
-    if (!isAuthenticated) {
-        return {
-            error: "Faça login novamente",
-        };
-    }
-
-    if (!id || typeof id !== "string") {
-        return {
-            error: "Dados inválidos",
-        };
-    }
-
-    let post;
-
-    try {
-        post = await postRepository.delete(id);
-    } catch (e: unknown) {
-        if (e instanceof Error) {
-            return {
-                error: e.message,
-            };
-        }
-
-        return {
-            error: "Erro desconhecido",
-        };
-    }
-
-    revalidateTag("posts", "max");
-    revalidateTag(`post-${post.slug}`, "max");
-
+  if (!isAuthenticated) {
     return {
-        error: "",
+      error: "Faça login novamente em outra aba",
     };
+  }
+
+  if (!id || typeof id !== "string") {
+    return {
+      error: "Dados inválidos",
+    };
+  }
+
+  const postResponse = await authenticatedApiRequest<PublicPostForApiDto>(
+    `/post/me/${id}`,
+    {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    },
+  );
+
+  if (!postResponse.success) {
+    return {
+      error: "Erro ao encontrar post",
+    };
+  }
+
+  const deletePostResponse = await authenticatedApiRequest<PublicPostForApiDto>(
+    `/post/me/${id}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    },
+  );
+
+  if (!deletePostResponse.success) {
+    return {
+      error: "Erro ao apagar post",
+    };
+  }
+
+  revalidateTag("posts", "max");
+  revalidateTag(`post-${postResponse.data.slug}`, "max");
+
+  return {
+    error: "",
+  };
 }
